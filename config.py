@@ -1,4 +1,5 @@
 import os
+import secrets
 import connexion
 from flask import jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -10,7 +11,10 @@ SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(vuln_app.app.root_path, 'd
 vuln_app.app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
 vuln_app.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-vuln_app.app.config['SECRET_KEY'] = 'random'
+# Use a deployment-provided key when one is configured. Development instances get a
+# fresh high-entropy key rather than the published value that previously allowed
+# anyone to forge an administrator token.
+vuln_app.app.config['SECRET_KEY'] = os.getenv('VAMPI_SECRET_KEY') or secrets.token_hex(32)
 # start the db
 db = SQLAlchemy(vuln_app.app)
 
