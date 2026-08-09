@@ -10,10 +10,11 @@ from connexion.exceptions import ProblemException
 vuln_app = connexion.App(__name__, specification_dir="./openapi_specs")
 
 # In-memory sliding-window limiter: no external dependency, no shared state
-# across processes, good enough to stop scripted brute-forcing per client IP.
+# across processes. Scoped to the credential-guessing endpoints only, so a
+# brute-force burst there can never 429 unrelated traffic elsewhere in the app.
 _request_log = defaultdict(deque)
-_LOGIN_LIMIT, _LOGIN_WINDOW = 10, 60
-_GLOBAL_LIMIT, _GLOBAL_WINDOW = 120, 60
+_CRED_LIMIT, _CRED_WINDOW = 30, 60
+_CRED_SUFFIXES = ("/login", "/register", "/password")
 
 
 def _rate_limited(key, limit, window):
@@ -29,20 +30,11 @@ def _rate_limited(key, limit, window):
 
 @vuln_app.app.before_request
 def _enforce_rate_limit():
+    if not request.path.endswith(_CRED_SUFFIXES):
+        return None
     ip = request.remote_addr or "unknown"
-    # Login is the credential-guessing target, so it gets its own tighter budget.
-    if request.path.endswith("/login"):
-        if _rate_limited(f"login:{ip}", _LOGIN_LIMIT, _LOGIN_WINDOW):
-            return (
-                jsonify(
-                    {
-                        "status": "fail",
-                        "message": "Too many requests. Please try again later.",
-                    }
-                ),
-                429,
-            )
-    if _rate_limited(f"global:{ip}", _GLOBAL_LIMIT, _GLOBAL_WINDOW):
+    key = f"{request.path}:{ip}"
+    if _rate_limited(key, _CRED_LIMIT, _CRED_WINDOW):
         return (
             jsonify(
                 {
@@ -52,6 +44,7 @@ def _enforce_rate_limit():
             ),
             429,
         )
+    return None
 
 
 SQLALCHEMY_DATABASE_URI = "sqlite:///" + os.path.join(
