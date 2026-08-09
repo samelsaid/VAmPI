@@ -1,4 +1,5 @@
 import os
+import secrets
 import connexion
 from flask import jsonify
 from flask_sqlalchemy import SQLAlchemy
@@ -10,7 +11,9 @@ SQLALCHEMY_DATABASE_URI = 'sqlite:///' + os.path.join(vuln_app.app.root_path, 'd
 vuln_app.app.config['SQLALCHEMY_DATABASE_URI'] = SQLALCHEMY_DATABASE_URI
 vuln_app.app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
-vuln_app.app.config['SECRET_KEY'] = 'random'
+# Operator-supplied key when present, otherwise a strong per-process random key.
+# A guessable constant let anyone recover the key and forge an admin token.
+vuln_app.app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY') or secrets.token_urlsafe(64)
 # start the db
 db = SQLAlchemy(vuln_app.app)
 
